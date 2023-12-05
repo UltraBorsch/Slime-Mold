@@ -1,0 +1,56 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel Update
+
+//perhaps modify so that each agent can have a different speed
+struct Agent {
+    float2 position;
+    float2 direction;
+};
+
+RWStructuredBuffer<Agent> agents;
+RWTexture2D<float4> TrailMap;
+
+uint numAgents, width, height;
+float moveSpeed, deltaTime, PI;
+
+uint hash (uint state) {
+    state ^= 2747636419u;
+    state *= 2654435769u;
+    state ^= state >> 16;
+    state *= 2654435769u;
+    state ^= state >> 16;
+    state *= 2654435769u;
+    return state;
+}
+
+bool inbounds (float2 position) {
+    return !(position.x < 0 || position.x >= width || position.y < 0 || position.y >= height);
+}
+
+float scaleToRange01 (uint input) {
+    return input / 4294967295.0;
+}
+
+[numthreads(16, 1, 1)]
+void Update (uint3 id : SV_DispatchThreadID) {
+    if (id.x >= numAgents) return;
+    
+    Agent agent = agents[id.x];
+    uint rand = hash(agent.position.y * width + agent.position.x + hash(id.x));
+
+    //get new position based on direction and current position
+    float2 newPos = agent.position + agent.direction * moveSpeed * deltaTime;
+    
+    //deal with map boundaries
+    if (!inbounds(newPos)) {
+        newPos.x = min(width - 0.01, max(0, newPos.x));
+        newPos.y = min(height - 0.01, max(0, newPos.y));
+        float newAngle = scaleToRange01(rand) * 2 * PI;
+        agents[id.x].direction = (cos(newAngle), sin(newAngle));
+    }
+    
+    //set new pos and draw the trail
+    agents[id.x].position = newPos;
+    TrailMap[int2(newPos.x, newPos.y)] = 1;
+}
+
