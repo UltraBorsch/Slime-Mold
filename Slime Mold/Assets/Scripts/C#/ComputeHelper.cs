@@ -41,4 +41,9 @@ public static class ComputeHelper {
             }
         }
     }
+
+    /// Copy the contents of one render texture into another. Assumes textures are the same size.
+    public static void CopyRenderTexture(Texture source, RenderTexture target) {
+        Graphics.Blit(source, target);
+    }
 }

@@ -405,10 +405,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0931ff9a9ad20214bad38c9d063abaab, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  width: 256
+  width: 512
   height: 256
   numOfAgents: 20
-  agentSpeed: 15
+  agentSpeed: 25
   slimeSim: {fileID: 7200000, guid: 63504cb8df349da4f926bf69c34eb29a, type: 3}
   agentDisplay: {fileID: 0}
   agentRenderer: {fileID: 728515447}
