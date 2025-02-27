@@ -3,7 +3,7 @@
 Based off of Sebastian Lague's video on ant and slime simulations
 https://www.youtube.com/watch?v=X-iSQQgOd1A
 
-TODO
+# TODO
 camera controls (zoom, pan, etc)
 species > 4
 bypass thread creation limit (update compute helper)
