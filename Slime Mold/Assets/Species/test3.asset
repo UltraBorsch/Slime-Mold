@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c20c952c7d9242347b7c2fc56349fa0b, type: 3}
+  m_Name: test3
+  m_EditorClassIdentifier: 
+  moveSpeed: 20
+  trailWeight: 10
+  turnSpeed: 540
+  sensorAngle: 45
+  sensorDistance: 20
+  sensorSize: 1
+  colour: {r: 0.34033048, g: 1, b: 0.2971698, a: 0}
+  numberOfAgents: 100000
+  spawnData:
+    mainAxisLow: 0.25
+    mainAxisHigh: 1
+    secondAxisLow: 0.25
+    secondAxisHigh: 1
+    shape: 2
+    angle: 0
+    speciesID: 2
+  speciesId: 2

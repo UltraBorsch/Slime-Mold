@@ -1,18 +1,33 @@
 // Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel Update
 #pragma kernel ProcessImage
+#pragma kernel ColourImage
 
-//perhaps modify so that each agent can have a different speed
 struct Agent {
-    float2 position;
-    float2 direction;
+    float2 position, direction;
+    uint speciesId;
 };
 
-RWStructuredBuffer<Agent> agents;
-RWTexture2D<float4> trailMap, processedTrailMap;
+//currently only supports up to 4 species
+struct Species {
+    float moveSpeed, trailWeight, sensorDistance;
+    float2x2 turnSpeedPos, turnSpeedNeg, sensorAnglePos, sensorAngleNeg;
+    int sensorSize;
+    float4 colour;
+    int4 mask;
+};
 
-uint numAgents, width, height;
-float moveSpeed, deltaTime, PI, evaporateSpeed, diffuseSpeed;
+//global information
+RWStructuredBuffer<Agent> agents;
+RWStructuredBuffer<Species> speciesIndex;
+RWTexture2D<float4> trailMap, processedTrailMap, colourMap;
+uint numAgents, width, height, numOfSpecies, timeSteps;
+float2x2 identity = { 1, 0, 0, 1 };
+float PI = 3.14159274, angle45 = 1 / sqrt(2), deltaTime, evaporateSpeed, diffuseSpeed;
+
+void dotMask () {
+    
+}
 
 uint hash (uint state) {
     state ^= 2747636419u;
@@ -24,8 +39,18 @@ uint hash (uint state) {
     return state;
 }
 
+float2x2 createRotationMatrix (float angle) {
+    float m11 = cos(angle), m12 = -sin(angle), m21 = sin(angle), m22 = cos(angle);
+    float2x2 mat = { m11, m12, m21, m22 };
+    return mat;
+}
+
 bool outOfBounds (float2 position) {
-    return position.x < 0 || position.x >= width || position.y < 0 || position.y >= height;
+    return position.x < 0 || position.x >= (float) width || position.y < 0 || position.y >= (float) height;
+}
+
+bool outOfBounds (int2 position) {
+    return position.x < 0 || position.x >= (float) width || position.y < 0 || position.y >= (float) height;
 }
 
 bool outOfBounds (uint2 position) {
@@ -36,42 +61,138 @@ float scaleToRange01 (uint input) {
     return input / 4294967295.0;
 }
 
-[numthreads(16, 1, 1)]
+float2 outOfCorner (float2 position) {
+    if (position.y < 0 && position.x < 0)
+        return float2(angle45, angle45);
+    if (position.y < 0 && position.x >= (float) width)
+        return float2(-angle45, angle45);
+    if (position.y >= (float) height && position.x >= (float) width)
+        return float2(-angle45, -angle45);
+    if (position.y >= (float) height && position.x < 0)
+        return float2(angle45, -angle45);
+    return float2(-1, -1);
+}
+
+float2 outOfSide (float2 position) {
+    if (position.y < 0)
+        return float2(0, 1);
+    if (position.x >= (float) width)
+        return float2(-1, 0);
+    if (position.y >= (float) height)
+        return float2(0, -1);
+    if (position.x < 0)
+        return float2(1, 0);
+    return float2(-1, -1);
+}
+
+float2 getCorrectAngle (float2 position, float2 direction) {
+    float2 corner = outOfCorner(position);
+    if (corner.x != -1) 
+        return corner;
+    
+    float2 norm = outOfSide(position);
+    //float2x2 angle = createRotationMatrix(rand * (PI / 2));
+    //float2 side = mul(outOfSide(position), angle);
+    float2 newDirection = direction - 2 * dot(direction, norm) * norm;
+    
+    return newDirection;
+}
+
+float sense (Agent agent, float2x2 offset) {
+    Species species = speciesIndex[agent.speciesId];
+    float2 sensorDirection = mul(offset, agent.direction);
+    float2 sensorCentre = agent.position + sensorDirection * species.sensorDistance;
+    float sum = 0;
+    
+    //could convert into some matrix math maybe?
+    for (int x = -species.sensorSize; x <= species.sensorSize; x++) {
+        for (int y = -species.sensorSize; y <= species.sensorSize; y++) {
+            float2 pos = sensorCentre + int2(x, y);
+
+            if (outOfBounds(pos)) {
+                sum -= 100000;
+                continue;
+            }
+            
+            int sampleX = min(width - 1, max(0, pos.x));
+            int sampleY = min(height - 1, max(0, pos.y));
+            
+            //might be able to change to some bitwise operation/dot product, essentially just a dot product of (-1, -1,... 1,... -1)
+            //for (uint i = 0; i < numOfSpecies; i++) {
+            //    int sign = i == agent.speciesId ? 1 : -1;
+                sum += dot(trailMap[int2(sampleX, sampleY)], speciesIndex[agent.speciesId].mask * 2 - 1);
+            //}
+        }
+    }
+    
+    return sum;
+}
+
+[numthreads(64, 1, 1)]
 void Update (uint3 id : SV_DispatchThreadID) {
-    if (id.x >= numAgents) return;
+    if (id.x >= numAgents)
+        return;
     
     Agent agent = agents[id.x];
+    Species species = speciesIndex[agent.speciesId];
     
-    uint rand = hash(agent.position.y * width + agent.position.x + hash(id.x + deltaTime * 100000));
-
+    //for (uint i = 0; i < timeSteps; i++) {
+    
+    //determine if agent turns
+        float forwardWeight = sense(agent, identity);
+        float leftWeight = sense(agent, species.sensorAngleNeg);
+        float rightWeight = sense(agent, species.sensorAnglePos);
+    
+    //keep straight
+        if (forwardWeight > leftWeight && forwardWeight > rightWeight) { }
+    
+    //turn randomly either direction (due to it favoring either direction but not straight
+        else if (forwardWeight < leftWeight && forwardWeight < rightWeight) {
+            uint rand = hash(agent.position.y * width + agent.position.x + hash(id.x + deltaTime * 100000));
+            float2x2 direction = rand & 1 ? species.turnSpeedNeg : species.turnSpeedPos;
+            agent.direction = mul(direction, agent.direction);
+        }
+    
+    //turn left
+        else if (leftWeight > rightWeight) {
+            agent.direction = mul(species.turnSpeedNeg, agent.direction);
+        }
+    
+    //turn right
+        else if (rightWeight > leftWeight) {
+            agent.direction = mul(species.turnSpeedPos, agent.direction);
+        }
+    
     //get new position based on direction and current position
-    float2 newPos = agent.position + agent.direction * moveSpeed * deltaTime;
+        agent.position += agent.direction * species.moveSpeed * deltaTime;
     
     //deal with map boundaries
     //improvement ccould be detect which boundary is being crossed, and choose a valid angle on the first try to avoid getting stuck
-    if (outOfBounds(newPos)) {
-        newPos.x = min(width - 1, max(0, newPos.x));
-        newPos.y = min(height - 1, max(0, newPos.y));
-        float newAngle = scaleToRange01(rand) * 2.0 * PI;
-        agents[id.x].direction = float2(cos(newAngle), sin(newAngle));
-    }
+        if (outOfBounds(agent.position)) {
+            agent.direction = getCorrectAngle(agent.position, agent.direction);
+            agent.position.x = min(width - 1, max(0, agent.position.x));
+            agent.position.y = min(height - 1, max(0, agent.position.y));
+        } else {
+            int2 coord = int2(agent.position);
+            trailMap[coord] = min(1, trailMap[coord] + speciesIndex[agent.speciesId].mask * species.trailWeight * deltaTime);
+        }
+    //}
     
     //set new pos and draw the trail
-    agents[id.x].position = newPos;
-    trailMap[int2(newPos.x, newPos.y)] = 1;
+    agents[id.x] = agent;
 }
 
-[numthreads(8, 8, 1)]
+[numthreads(16, 16, 1)]
 void ProcessImage (uint3 id : SV_DispatchThreadID) {
-    if (id.x < 0 || id.x >= width || id.y < 0 || id.y >= height) return;
+    if (outOfBounds(uint2(id.x, id.y)))
+        return;
     
     float4 sum = 0;
     for (int x = -1; x <= 1; x++) {
         for (int y = -1; y <= 1; y++) {
-            int sampleX = id.x + x, sampleY = id.y + y;
-            
-            if (!outOfBounds(int2(sampleX, sampleY))) 
-                sum += trailMap[int2(sampleX, sampleY)];
+            int sampleX = min(width - 1, max(0, id.x + x));
+            int sampleY = min(height - 1, max(0, id.y + y));
+            sum += trailMap[int2(sampleX, sampleY)];
         }
     }
     
@@ -79,10 +200,23 @@ void ProcessImage (uint3 id : SV_DispatchThreadID) {
     float4 originalValue = trailMap[id.xy];
     
     //blend (lerp) between the original value and the diffused value over time
-    float4 diffusedValue = lerp(originalValue, blurResult, diffuseSpeed * deltaTime);
+    float4 diffusedValue = lerp(originalValue, blurResult, saturate(diffuseSpeed * deltaTime));
     
     //subtract from the diffused value to simulate evaporation
     float4 diffusedAndEvaporatedValue = max(0, diffusedValue - evaporateSpeed * deltaTime);
     
     processedTrailMap[id.xy] = diffusedAndEvaporatedValue;
+}
+
+[numthreads(16, 16, 1)]
+void ColourImage (uint3 id : SV_DispatchThreadID) {
+    if (outOfBounds(uint2(id.x, id.y)))
+        return;
+    
+    float4 colour = float4(0, 0, 0, 0);
+    for (uint i = 0; i < numOfSpecies; i++) {
+        colour += processedTrailMap[id.xy][i] * speciesIndex[i].colour;
+    }
+    
+        colourMap[id.xy] = colour;
 }

@@ -2,37 +2,24 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Experimental.Rendering;
+using static ComputeHelper;
+using static Helper;
 
 public class Controller : MonoBehaviour {
-    public int width, height, numOfAgents;
-    public float agentSpeed, evaporateSpeed, diffuseSpeed;
-    public ComputeShader slimeSim, agentDisplay;
-    private ComputeBuffer agentBuffer = null;
+    public SimulationSettings settings;
+    public ComputeShader slimeSim;
+    private ComputeBuffer agentBuffer = null, speciesBuffer = null;
     public MeshRenderer agentRenderer;
+    private AgentSpawner agentSpawner;
 
-    public RenderTexture trailMap, processedTrailMap;
+    private Species[] speciesStructs;
 
-    public struct Agent {
-        public Vector2 position;
-        public Vector2 direction;
+    public RenderTexture trailMap, processedTrailMap, colourMap;
 
-        public Agent(Vector2 position, Vector2 direction) {
-            this.position = position;
-            this.direction = direction;
-        }
-    }
-
-    private void CreateAgents(Agent[] arr) {
-        for (int i = 0; i < arr.Length; i++) {
-            Vector2 position = new(width / 2, height / 2);
-            float angle = Random.Range(0f, 2f * Mathf.PI);
-            Vector2 direction = new(Mathf.Cos(angle), Mathf.Sin(angle));
-            arr[i] = new(position, direction);
-        }
-    }
+    private int numOfAgents;
 
     private RenderTexture TextureFactory() {
-        RenderTexture temp = new(width, height, 0) {
+        RenderTexture temp = new(settings.width, settings.height, 0) {
             enableRandomWrite = true,
             graphicsFormat = GraphicsFormat.R16G16B16A16_SFloat,
             autoGenerateMips = false,
@@ -45,42 +32,74 @@ public class Controller : MonoBehaviour {
     }
 
     private void Start() {
-        float quadHeight = Camera.main.orthographicSize * 2f, quadWidth = quadHeight * Screen.width / Screen.height;
+        //Camera.main.aspect = width / height;
+        float quadHeight = Camera.main.orthographicSize * 2f, quadWidth = quadHeight * settings.width / settings.height;
         agentRenderer.transform.localScale = new(quadWidth, quadHeight, 1);
 
         trailMap = TextureFactory();
         processedTrailMap = TextureFactory();
-        agentRenderer.material.mainTexture = trailMap;
+        colourMap = TextureFactory();
+        agentRenderer.material.mainTexture = colourMap;
+
+        speciesStructs = new Species[settings.species.Length];
+        for (int i = 0; i < settings.species.Length; i++) {
+            settings.species[i].Setup(i);
+            numOfAgents += settings.species[i].numberOfAgents;
+        }
 
         Agent[] agents = new Agent[numOfAgents];
-        CreateAgents(agents);
-        ComputeHelper.CreateStructuredBuffer(ref agentBuffer, agents);
+        agentSpawner = new(settings.width, settings.height);
+
+        int startIndex = 0;
+        foreach (AgentSpecies species in settings.species) {
+            agents = agentSpawner.SpawnAgents(species, startIndex, agents);
+            startIndex += species.numberOfAgents;
+        }
+
+        CreateStructuredBuffer(ref agentBuffer, agents);
+
+        for (int i = 0; i < settings.species.Length; i++)
+            speciesStructs[i] = settings.species[i].SpeciesStruct;
+
+        settings.timeSteps = Mathf.Max(1, settings.timeSteps);
 
         slimeSim.SetBuffer(0, "agents", agentBuffer);
-        slimeSim.SetInt("width", width);
-        slimeSim.SetInt("height", height);
+        slimeSim.SetInt("width", settings.width);
+        slimeSim.SetInt("height", settings.height);
         slimeSim.SetInt("numAgents", numOfAgents);
-        slimeSim.SetFloat("PI", Mathf.PI);
-        slimeSim.SetFloat("moveSpeed", agentSpeed);
-        slimeSim.SetFloat("evaporateSpeed", evaporateSpeed);
-        slimeSim.SetFloat("diffuseSpeed", diffuseSpeed);
+        slimeSim.SetInt("timeSteps", settings.timeSteps);
+        slimeSim.SetInt("numOfSpecies", settings.species.Length);
+        slimeSim.SetFloat("evaporateSpeed", settings.evaporateSpeed);
+        slimeSim.SetFloat("diffuseSpeed", settings.diffuseSpeed);
         slimeSim.SetTexture(0, "trailMap", trailMap);
         slimeSim.SetTexture(1, "trailMap", trailMap);
         slimeSim.SetTexture(1, "processedTrailMap", processedTrailMap);
+        slimeSim.SetTexture(2, "processedTrailMap", processedTrailMap);
+        slimeSim.SetTexture(2, "colourMap", colourMap);
     }
 
     private void FixedUpdate() {
         slimeSim.SetFloat("deltaTime", Time.deltaTime);
+
+        for (int i = 0; i < settings.species.Length; i++) 
+            speciesStructs[i] = settings.species[i].SpeciesStruct;
+
+        CreateStructuredBuffer(ref speciesBuffer, speciesStructs);
+        slimeSim.SetBuffer(0, "speciesIndex", speciesBuffer);
+        slimeSim.SetBuffer(2, "speciesIndex", speciesBuffer);
+
         RunSimulation();
     }
 
     void OnDestroy() {
-        ComputeHelper.Release(agentBuffer);
+        Release(agentBuffer);
+        Release(speciesBuffer);
     }
 
     public void RunSimulation() {
-        ComputeHelper.Run(slimeSim, numOfAgents, kernelIndex: 0);
-        ComputeHelper.Run(slimeSim, width, height, kernelIndex: 1);
-        ComputeHelper.CopyRenderTexture(processedTrailMap, trailMap);
+        Run(slimeSim, numOfAgents, kernelIndex: 0);
+        Run(slimeSim, settings.width, settings.height, kernelIndex: 1);
+        Run(slimeSim, settings.width, settings.height, kernelIndex: 2);
+        CopyRenderTexture(processedTrailMap, trailMap);
     }
 }

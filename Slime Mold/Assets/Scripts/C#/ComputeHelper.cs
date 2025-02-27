@@ -36,9 +36,7 @@ public static class ComputeHelper {
     /// Releases supplied buffer/s if not null
     public static void Release(params ComputeBuffer[] buffers) {
         for (int i = 0; i < buffers.Length; i++) {
-            if (buffers[i] != null) {
-                buffers[i].Release();
-            }
+            buffers[i]?.Release();
         }
     }
 

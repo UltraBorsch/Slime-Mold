@@ -1,0 +1,6 @@
+camera controls (zoom, pan, etc)
+species > 4
+bypass thread creation limit (update compute helper)
+move agent creation/spawning to a compute shader
+
+might have a bug the first time i load scriptable objects?
