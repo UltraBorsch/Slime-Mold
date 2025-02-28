@@ -28,6 +28,7 @@ public static class ComputeHelper {
             case Vector2 v2: shader.SetVector(valueName, v2); break;
             case Vector3 v3: shader.SetVector(valueName, v3); break;
             case Vector4 v4: shader.SetVector(valueName, v4); break;
+            case Color c: shader.SetVector(valueName, c); break;
             case Matrix4x4 m: shader.SetMatrix(valueName, m); break;
             case int[] iarr: shader.SetInts(valueName, iarr); break;
             case float[] farr: shader.SetFloats(valueName, farr); break;
