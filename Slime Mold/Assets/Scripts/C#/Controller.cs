@@ -56,7 +56,7 @@ public class Controller : MonoBehaviour {
             startIndex += species.numberOfAgents;
         }
 
-        CreateStructuredBuffer(ref agentBuffer, agents);
+        agentBuffer = CreateAndSetBuffer(agents);
 
         for (int i = 0; i < settings.species.Length; i++)
             speciesStructs[i] = settings.species[i].SpeciesStruct;
@@ -84,7 +84,7 @@ public class Controller : MonoBehaviour {
         for (int i = 0; i < settings.species.Length; i++) 
             speciesStructs[i] = settings.species[i].SpeciesStruct;
 
-        CreateStructuredBuffer(ref speciesBuffer, speciesStructs);
+        speciesBuffer = CreateAndSetBuffer(speciesStructs);
         slimeSim.SetBuffer(0, "speciesIndex", speciesBuffer);
         slimeSim.SetBuffer(2, "speciesIndex", speciesBuffer);
 
@@ -97,9 +97,9 @@ public class Controller : MonoBehaviour {
     }
 
     public void RunSimulation() {
-        Run(slimeSim, numOfAgents, kernelIndex: 0);
-        Run(slimeSim, settings.width, settings.height, kernelIndex: 1);
-        Run(slimeSim, settings.width, settings.height, kernelIndex: 2);
+        Run(slimeSim, 0, numOfAgents);
+        Run(slimeSim, 1, settings.width, settings.height);
+        Run(slimeSim, 2, settings.width, settings.height);
         CopyRenderTexture(processedTrailMap, trailMap);
     }
 }

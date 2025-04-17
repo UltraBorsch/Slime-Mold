@@ -19,6 +19,4 @@ MonoBehaviour:
   diffuseSpeed: 3
   species:
   - {fileID: 11400000, guid: b55c9d10695be4344ba5a89ab2688a91, type: 2}
-  - {fileID: 11400000, guid: 3178257a7d902374ba6bd84aa435bbcd, type: 2}
   - {fileID: 11400000, guid: 95e70e093fca268478d209a4be0da04c, type: 2}
-  - {fileID: 11400000, guid: a527b1cea3cf5734cbb846e3155347d7, type: 2}
